@@ -99,6 +99,9 @@
     <ClCompile Include="MovedBlocks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="SyntaxHighlighter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="GotoLineDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -447,6 +450,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MovedBlocks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SyntaxHighlighter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TimingLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="GotoLineDlg.h">

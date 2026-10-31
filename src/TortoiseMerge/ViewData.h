@@ -22,6 +22,8 @@
 #include "EOL.h"
 
 #include <vector>
+#include <algorithm>
+#include <climits>
 
 enum class HideState
 {
@@ -80,7 +82,7 @@ public:
 	void			AddEmpty() {AddData(CString(), DiffState::Empty, -1, EOL::NoEnding, HideState::Shown, -1);}
 	void			InsertData(int index, const CString& sLine, DiffState state, int linenumber, EOL ending, HideState hide, int movedline);
 	void			InsertData(int index, const viewdata& data);
-	void			RemoveData(int index) {m_data.erase(m_data.begin() + index);}
+	void			RemoveData(int index) { ++m_nTextVersion; m_data.erase(m_data.begin() + index); }
 
 	const viewdata&	GetData(int index) const {return m_data[index];}
 	const CString&	GetLine(int index) const {return m_data[index].sLine;}
@@ -104,10 +106,12 @@ public:
 			m_nMarkedBlocks--;
 		else if (!oldmarked && marked)
 			m_nMarkedBlocks++;
+		if (m_data[index].sLine != data.sLine)
+			++m_nTextVersion;
 		m_data[index] = data;
 	}
 	void			SetState(int index, DiffState state) {m_data[index].state = state;}
-	void			SetLine(int index, const CString& sLine) {m_data[index].sLine = sLine;}
+	void			SetLine(int index, const CString& sLine) { ++m_nTextVersion; m_data[index].sLine = sLine; }
 	void			SetLineNumber(int index, int linenumber) {m_data[index].linenumber = linenumber;}
 	void			SetLineEnding(int index, EOL ending) {m_data[index].ending = ending;}
 	void			SetMovedIndex(int index, int movedIndex, bool movedFrom) {m_data[index].movedIndex = movedIndex; m_data[index].movedFrom = movedFrom;}
@@ -123,10 +127,52 @@ public:
 	}
 	bool			HasMarkedBlocks() const { return m_nMarkedBlocks > 0; }
 
-	void			Clear() { m_data.clear(); m_nMarkedBlocks = 0; }
+	void			Clear() { ++m_nTextVersion; m_data.clear(); m_nMarkedBlocks = 0; }
+	/// changes whenever the text of a line, or the number of lines, changes (used to invalidate caches like the syntax highlighting)
+	unsigned int	GetTextVersion() const { return m_nTextVersion; }
 	void			Reserve(int length) {m_data.reserve(length);}
 
 protected:
 	std::vector<viewdata>		m_data;
 	int							m_nMarkedBlocks = 0;
+	unsigned int				m_nTextVersion = 0;
+};
+
+/**
+ * \ingroup TortoiseMerge
+ * Answers CViewData::FindLineNumber() queries in O(log n) instead of O(n).
+ * The index is only valid as long as the line numbers of the view data
+ * do not change (other attributes, like the moved index, may change).
+ *
+ * FindLineNumber(n) returns the first index i with linenumber[i] >= n.
+ * Since empty lines have a line number of -1, the line numbers are not
+ * sorted; the running maximum of the line numbers is, however, and the
+ * first index where the running maximum reaches n is exactly the first
+ * index whose own line number reaches n.
+ */
+class CLineNumberIndex
+{
+public:
+	explicit CLineNumberIndex(const CViewData& data)
+	{
+		const int count = data.GetCount();
+		m_runningMax.reserve(count);
+		int runningMax = INT_MIN;
+		for (int i = 0; i < count; ++i)
+		{
+			runningMax = std::max(runningMax, data.GetLineNumber(i));
+			m_runningMax.push_back(runningMax);
+		}
+	}
+
+	int FindLineNumber(int number) const
+	{
+		auto it = std::lower_bound(m_runningMax.cbegin(), m_runningMax.cend(), number);
+		if (it == m_runningMax.cend())
+			return -1;
+		return static_cast<int>(it - m_runningMax.cbegin());
+	}
+
+private:
+	std::vector<int> m_runningMax;
 };

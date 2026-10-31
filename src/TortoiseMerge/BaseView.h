@@ -29,6 +29,7 @@
 #include "TripleClick.h"
 #include "IconMenu.h"
 #include "FindDlg.h"
+#include "SyntaxHighlighter.h"
 
 struct inlineDiffPos
 {
@@ -419,6 +420,11 @@ protected:  // methods
 	int				CalcColFromPoint(int xpos, int lineIndex);
 	POINT			TextToClient(const POINT& point);
 	void			DrawTextLine(CDC * pDC, const CRect &rc, int nLineIndex, POINT& coords);
+	/// (re)lexes the view data if the syntax highlighting is outdated; returns false if not highlighted
+	bool			UpdateSyntaxHighlighting();
+	/// overrides the text colors of \a lineCols with the syntax colors of \a nViewLine
+	void			ApplySyntaxColors(LineColors& lineCols, int nViewLine);
+	CString			GetSyntaxFileName() const;
 	void			ClearCurrentSelection();
 	void			AdjustSelection(bool bMoveLeft);
 	bool			SelectNextBlock(int nDirection, bool bConflict, bool bSkipEndOfCurrentBlock = true, bool dryrun = false);
@@ -492,6 +498,7 @@ protected:  // variables
 	BOOL			m_bIconLFs;
 	int				m_nLineHeight = -1;
 	int				m_nCharWidth = -1;
+	bool			m_bFixedPitchFont = false;	///< true if all (latin) chars of the font have the same width
 	int				m_nMaxLineLength = -1;
 	int				m_nScreenLines = -1;
 	int				m_nScreenChars = -1;
@@ -565,6 +572,11 @@ protected:  // variables
 	bool			m_bInsertMode = true;
 	bool			m_bDark = false;
 	int				m_themeCallbackId = 0;
+
+	CSyntaxHighlighter	m_syntax;
+	CString			m_sSyntaxFileName;				///< file name the language of m_syntax was chosen for
+	const CViewData* m_pSyntaxViewData = nullptr;	///< view data m_syntax was built from
+	unsigned int	m_nSyntaxTextVersion = 0;		///< text version of m_pSyntaxViewData m_syntax was built from
 	char			m_szTip[MAX_PATH*2+1];
 	wchar_t			m_wszTip[MAX_PATH*2+1];
 	// These three pointers lead to the three parent

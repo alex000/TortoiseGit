@@ -98,7 +98,16 @@ public:
 		UTF32_BE,		//=12001,
 		UTF8,			//=65001,
 		UTF8BOM,		//=UTF8+65536,
+		CP866,			//=866, OEM Cyrillic (DOS)
 	};
+
+	/// returns true for 8-bit code page encodings (other than the system ANSI one)
+	/// which are converted via MultiByteToWideChar
+	static bool		IsCodePageType(UnicodeType type) { return type == UnicodeType::CP866; }
+	/// code page used to decode/encode the given type (only valid if IsCodePageType())
+	static UINT		GetCodePage(UnicodeType type) { return type == UnicodeType::CP866 ? 866 : CP_ACP; }
+	/// type to use for 8-bit files which are not valid UTF-8 (registry: Default8BitCodePage)
+	static UnicodeType GetDefault8BitType();
 
 	struct SaveParams {
 		UnicodeType		m_UnicodeType = CFileTextLines::UnicodeType::AUTOTYPE;
@@ -293,6 +302,18 @@ public:
 		: CAsciiFilter(pFile)
 	{
 		m_nCodePage = CP_UTF8;
+	}
+};
+
+
+/// Filter for an arbitrary Windows code page (e.g. 866 - OEM Cyrillic)
+class CCodePageFilter : public CAsciiFilter
+{
+public:
+	CCodePageFilter(CStdioFile* pFile, UINT nCodePage)
+		: CAsciiFilter(pFile)
+	{
+		m_nCodePage = nCodePage;
 	}
 };
 

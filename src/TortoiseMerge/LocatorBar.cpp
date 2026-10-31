@@ -60,6 +60,7 @@ END_MESSAGE_MAP()
 
 void CLocatorBar::DocumentUpdated()
 {
+	TGM_TIMING_FUNC();
 	m_pMainFrm = static_cast<CMainFrame*>(this->GetParentFrame());
 	if (!m_pMainFrm)
 		return;

@@ -168,6 +168,8 @@ protected:
 	afx_msg void	OnUpdateNavigatePrevinlinediff(CCmdUI *pCmdUI);
 	afx_msg void	OnViewMovedBlocks();
 	afx_msg void	OnUpdateViewMovedBlocks(CCmdUI *pCmdUI);
+	afx_msg void	OnViewSyntaxHighlight();
+	afx_msg void	OnUpdateViewSyntaxHighlight(CCmdUI *pCmdUI);
 	afx_msg void	OnViewWraplonglines();
 	afx_msg void	OnUpdateViewWraplonglines(CCmdUI *pCmdUI);
 	afx_msg void	OnIndicatorLeftview();
@@ -290,6 +292,7 @@ protected:
 
 	CRegDWORD		m_regWrapLines;
 	CRegDWORD		m_regViewModedBlocks;
+	CRegDWORD		m_regSyntaxHighlight;
 	CRegDWORD		m_regOneWay;
 	CRegDWORD		m_regCollapsed;
 	CRegDWORD		m_regInlineDiff;
@@ -314,6 +317,7 @@ public:
 	int				m_nMoveMovesToIgnore = 0;
 	bool			m_bCollapsed;
 	bool			m_bViewMovedBlocks;
+	bool			m_bSyntaxHighlight;
 	bool			m_bWrapLines;
 	bool			m_bSaveRequired = false;
 	bool			m_bSaveRequiredOnConflicts = false;

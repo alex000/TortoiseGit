@@ -107,20 +107,20 @@ bool CDiffData::HandleSvnError(svn_error_t * svnerr)
 	return false;
 }
 
-void CDiffData::TieMovedBlocks(int from, int to, apr_off_t length)
+void CDiffData::TieMovedBlocks(int from, int to, apr_off_t length, const CLineNumberIndex& leftIndex, const CLineNumberIndex& rightIndex, const CLineNumberIndex& bothIndex)
 {
 	for(int i=0; i<length; i++, to++, from++)
 	{
-		int fromIndex = m_YourBaseLeft.FindLineNumber(from);
+		int fromIndex = leftIndex.FindLineNumber(from);
 		if (fromIndex < 0)
 			return;
-		int toIndex = m_YourBaseRight.FindLineNumber(to);
+		int toIndex = rightIndex.FindLineNumber(to);
 		if (toIndex < 0)
 			return;
 		m_YourBaseLeft.SetMovedIndex(fromIndex, toIndex, true);
 		m_YourBaseRight.SetMovedIndex(toIndex, fromIndex, false);
 
-		toIndex = m_YourBaseBoth.FindLineNumber(to);
+		toIndex = bothIndex.FindLineNumber(to);
 		if (toIndex < 0)
 			return;
 		while((toIndex < m_YourBaseBoth.GetCount())&&
@@ -131,7 +131,7 @@ void CDiffData::TieMovedBlocks(int from, int to, apr_off_t length)
 			toIndex++;
 		}
 
-		fromIndex = m_YourBaseBoth.FindLineNumber(from);
+		fromIndex = bothIndex.FindLineNumber(from);
 		if (fromIndex < 0)
 			return;
 		while((fromIndex < m_YourBaseBoth.GetCount())&&
@@ -226,6 +226,8 @@ BOOL CDiffData::Load()
 	bool bTheirIsUtf8 = false;
 	bool bYourIsUtf8  = false;
 
+	std::optional<CScopedTiming> stepTiming;
+	stepTiming.emplace("CDiffData::Load: read+decode files");
 	if (IsBaseFileInUse())
 	{
 		if (!m_arBaseFile.Load(m_baseFile.GetFilename()))
@@ -269,6 +271,8 @@ BOOL CDiffData::Load()
 	// with lines marked as different throughout the files even though the lines
 	// would show no change at all in the viewer.
 
+	stepTiming.reset();
+	stepTiming.emplace("CDiffData::Load: write converted temp files");
 	// convert all files we need to
 	bool bIsUtf8 = bBaseIsUtf8 || bTheirIsUtf8 || bYourIsUtf8; // any file end as UTF8
 	bBaseNeedConvert |= (IsBaseFileInUse() && !bBaseIsUtf8 && bIsUtf8);
@@ -299,6 +303,7 @@ BOOL CDiffData::Load()
 						, m_rx, m_replacement);
 	}
 
+	stepTiming.reset();
 	// Calculate the number of lines in the largest of the three files
 	int lengthHint = GetLineCount();
 
@@ -325,6 +330,7 @@ BOOL CDiffData::Load()
 	// Is this a two-way diff?
 	if (IsBaseFileInUse() && IsYourFileInUse() && !IsTheirFileInUse())
 	{
+		TGM_TIMING("CDiffData::DoTwoWayDiff");
 		if (!DoTwoWayDiff(sConvertedBaseFilename, sConvertedYourFilename, ignoreWs, bIgnoreEOL, !!bIgnoreCase, bIgnoreComments, pool))
 		{
 			apr_pool_destroy (pool);                    // free the allocated memory
@@ -342,6 +348,7 @@ BOOL CDiffData::Load()
 	{
 		m_Diff3.Reserve(lengthHint);
 
+		TGM_TIMING("CDiffData::DoThreeWayDiff");
 		if (!DoThreeWayDiff(sConvertedBaseFilename, sConvertedYourFilename, sConvertedTheirFilename, ignoreWs, bIgnoreEOL, !!bIgnoreCase, bIgnoreComments, pool))
 		{
 			apr_pool_destroy (pool);                    // free the allocated memory
@@ -367,14 +374,23 @@ bool CDiffData::DoTwoWayDiff(const CString& sBaseFilename, const CString& sYourF
 	CStringA sYourFilenameUtf8 = CUnicodeUtils::GetUTF8(sYourFilename);
 
 	svn_diff_t* diffYourBase = nullptr;
-	svn_error_t * svnerr = svn_diff_file_diff_2(&diffYourBase, sBaseFilenameUtf8, sYourFilenameUtf8, options, pool);
+	svn_error_t* svnerr;
+	{
+		TGM_TIMING("svn_diff_file_diff_2");
+		svnerr = svn_diff_file_diff_2(&diffYourBase, sBaseFilenameUtf8, sYourFilenameUtf8, options, pool);
+	}
 
 	if (svnerr)
 		return HandleSvnError(svnerr);
 
 	tsvn_svn_diff_t_extension* movedBlocks = nullptr;
 	if(m_bViewMovedBlocks)
+	{
+		TGM_TIMING("MovedBlocksDetect");
 		movedBlocks = MovedBlocksDetect(diffYourBase, ignoreWs, pool); // Side effect is that diffs are now splitted
+	}
+	std::optional<CScopedTiming> stepTiming;
+	stepTiming.emplace("DoTwoWayDiff: build one-pane view data");
 
 	svn_diff_t * tempdiff = diffYourBase;
 	LONG baseline = 0;
@@ -448,6 +464,8 @@ bool CDiffData::DoTwoWayDiff(const CString& sBaseFilename, const CString& sYourF
 	}
 
 	HideUnchangedSections(&m_YourBaseBoth, nullptr, nullptr);
+	stepTiming.reset();
+	stepTiming.emplace("DoTwoWayDiff: build two-pane view data");
 
 	tempdiff = diffYourBase;
 	baseline = 0;
@@ -627,19 +645,29 @@ bool CDiffData::DoTwoWayDiff(const CString& sBaseFilename, const CString& sYourF
 
 
 	// Fixing results for conforming moved blocks
+	stepTiming.reset();
+	stepTiming.emplace("DoTwoWayDiff: tie moved blocks");
 
+	// line numbers do not change while tying the blocks, so the lookups can be indexed
+	std::optional<CLineNumberIndex> leftIndex, rightIndex, bothIndex;
+	if (movedBlocks)
+	{
+		leftIndex.emplace(m_YourBaseLeft);
+		rightIndex.emplace(m_YourBaseRight);
+		bothIndex.emplace(m_YourBaseBoth);
+	}
 	while(movedBlocks)
 	{
 		tempdiff = movedBlocks->base;
 		if(movedBlocks->moved_to != -1)
 		{
 			// set states in a block original:length -> moved_to:length
-			TieMovedBlocks(static_cast<int>(tempdiff->original_start), movedBlocks->moved_to, tempdiff->original_length);
+			TieMovedBlocks(static_cast<int>(tempdiff->original_start), movedBlocks->moved_to, tempdiff->original_length, *leftIndex, *rightIndex, *bothIndex);
 		}
 		if(movedBlocks->moved_from != -1)
 		{
 			// set states in a block modified:length -> moved_from:length
-			TieMovedBlocks(movedBlocks->moved_from, static_cast<int>(tempdiff->modified_start), tempdiff->modified_length);
+			TieMovedBlocks(movedBlocks->moved_from, static_cast<int>(tempdiff->modified_start), tempdiff->modified_length, *leftIndex, *rightIndex, *bothIndex);
 		}
 		movedBlocks = movedBlocks->next;
 	}
@@ -659,6 +687,7 @@ bool CDiffData::DoTwoWayDiff(const CString& sBaseFilename, const CString& sYourF
 		}
 	}//*/
 
+	stepTiming.reset();
 	TRACE(L"done with 2-way diff\n");
 
 	HideUnchangedSections(&m_YourBaseLeft, &m_YourBaseRight, nullptr);
@@ -688,7 +717,11 @@ bool CDiffData::DoThreeWayDiff(const CString& sBaseFilename, const CString& sYou
 	CStringA sTheirFilenameUtf8 = CUnicodeUtils::GetUTF8(sTheirFilename);
 
 	svn_diff_t* diffTheirYourBase = nullptr;
-	svn_error_t * svnerr = svn_diff_file_diff3_2(&diffTheirYourBase, sBaseFilenameUtf8, sTheirFilenameUtf8, sYourFilenameUtf8, options, pool);
+	svn_error_t* svnerr;
+	{
+		TGM_TIMING("svn_diff_file_diff3_2");
+		svnerr = svn_diff_file_diff3_2(&diffTheirYourBase, sBaseFilenameUtf8, sTheirFilenameUtf8, sYourFilenameUtf8, options, pool);
+	}
 	if (svnerr)
 		return HandleSvnError(svnerr);
 

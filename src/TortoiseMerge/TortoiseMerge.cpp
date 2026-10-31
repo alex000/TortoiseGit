@@ -89,6 +89,8 @@ bool g_bGroupingRemoveIcon = false;
 // CTortoiseMergeApp initialization
 BOOL CTortoiseMergeApp::InitInstance()
 {
+	CTimingLog::Mark("InitInstance start");
+	TGM_TIMING("CTortoiseMergeApp::InitInstance");
 	SetDllDirectory(L"");
 	SetTaskIDPerUUID();
 	CCrashReport::Instance().AddUserInfoToReport(L"CommandLine", GetCommandLine());
@@ -160,10 +162,16 @@ BOOL CTortoiseMergeApp::InitInstance()
 	m_pMainWnd = pFrame;
 	m_nCmdShow = SW_HIDE;
 	// create and load the frame with its resources
-	if (!pFrame->LoadFrame(IDR_MAINFRAME, WS_OVERLAPPEDWINDOW | FWS_ADDTOTITLE, nullptr, nullptr))
-		return FALSE;
-	if (pFrame->InitRibbon())
-		return FALSE;
+	{
+		TGM_TIMING("CMainFrame::LoadFrame");
+		if (!pFrame->LoadFrame(IDR_MAINFRAME, WS_OVERLAPPEDWINDOW | FWS_ADDTOTITLE, nullptr, nullptr))
+			return FALSE;
+	}
+	{
+		TGM_TIMING("CMainFrame::InitRibbon");
+		if (pFrame->InitRibbon())
+			return FALSE;
+	}
 
 	// Fill in the command line options
 	pFrame->m_Data.m_baseFile.SetFileName(parser.GetVal(L"base"));

@@ -42,6 +42,7 @@ void CViewData::AddData(const CString& sLine, DiffState state, int linenumber, E
 
 void CViewData::AddData(const viewdata& data)
 {
+	++m_nTextVersion;
 	return m_data.push_back(data);
 }
 
@@ -59,6 +60,7 @@ void CViewData::InsertData(int index, const CString& sLine, DiffState state, int
 
 void CViewData::InsertData(int index, const viewdata& data)
 {
+	++m_nTextVersion;
 	m_data.insert(m_data.begin()+index, data);
 }
 

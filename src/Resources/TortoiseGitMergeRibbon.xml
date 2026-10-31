@@ -240,6 +240,12 @@
       </Command.LargeImages>
     </Command>
 
+    <Command Name="cmdViewSyntaxHighlight" LabelTitle="Syntax highlighting" Id="33003" Keytip="Y">
+      <Command.LargeImages>
+        <Image Source="ribbon/SyntaxHighlight.bmp" />
+      </Command.LargeImages>
+    </Command>
+
     <Command Name="cmdViewInlineDiff" LabelTitle="Inline diff" Id="32889">
       <Command.LargeImages>
         <Image Source="ribbon/InlineDiff.bmp" />
@@ -498,13 +504,14 @@
             <ToggleButton CommandName="cmdViewIgnoreEOL" />
           </Group>
 
-          <Group CommandName="cmdGroupView" SizeDefinition="FiveButtons">
+          <Group CommandName="cmdGroupView" SizeDefinition="SixButtons">
             <DropDownButton CommandName="cmdViewBars">
               <CheckBox CommandName="cmdViewLineDiffBar"/>
               <CheckBox CommandName="cmdViewLocatorBar"/>
               <CheckBox CommandName="cmdViewStatusBar"/>
             </DropDownButton>
             <ToggleButton CommandName="cmdViewWrapLines" />
+            <ToggleButton CommandName="cmdViewSyntaxHighlight" />
             <ToggleButton CommandName="cmdViewOneWayDiff" />
             <Button CommandName="cmdViewSwitchLeft" />
             <ToggleButton CommandName="cmdViewCollapsed" />

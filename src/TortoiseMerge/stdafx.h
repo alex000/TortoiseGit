@@ -52,6 +52,7 @@ using std::min;
 #include <map>
 #include <vector>
 #include <list>
+#include <optional>
 
 #pragma warning(push)
 #include "apr_general.h"
@@ -74,6 +75,7 @@ using std::min;
 #define REGSTRING_DARKTHEME L"Software\\TortoiseGitMerge\\DarkTheme"
 
 #include "scope_exit_noexcept.h"
+#include "TimingLog.h"
 #include "ProfilingInfo.h"
 #include "CrashReport.h"
 

@@ -159,24 +159,24 @@ CFileTextLines::UnicodeType CFileTextLines::CheckUnicodeType(LPCVOID pBuffer, in
 			}
 			else if (nNeedData)
 			{
-				return CFileTextLines::UnicodeType::ASCII;
+				return GetDefault8BitType();
 			}
 			continue;
 		}
 		if ((zChar & 0x40)==0) // top bit
 		{
 			if (!nNeedData)
-				return CFileTextLines::UnicodeType::ASCII;
+				return GetDefault8BitType();
 			--nNeedData;
 		}
 		else if (nNeedData)
 		{
-			return CFileTextLines::UnicodeType::ASCII;
+			return GetDefault8BitType();
 		}
 		else if ((zChar & 0x20)==0) // top two bits
 		{
 			if (zChar<=0xC1)
-				return CFileTextLines::UnicodeType::ASCII;
+				return GetDefault8BitType();
 			nNeedData = 1;
 		}
 		else if ((zChar & 0x10)==0) // top three bits
@@ -186,18 +186,33 @@ CFileTextLines::UnicodeType CFileTextLines::CheckUnicodeType(LPCVOID pBuffer, in
 		else if ((zChar & 0x08)==0) // top four bits
 		{
 			if (zChar>=0xf5)
-				return CFileTextLines::UnicodeType::ASCII;
+				return GetDefault8BitType();
 			nNeedData = 3;
 		}
 		else
-			return CFileTextLines::UnicodeType::ASCII;
+			return GetDefault8BitType();
 	}
 	if (bNonANSI && nNeedData==0)
 		// if get here thru nonAscii and no missing data left then its valid UTF8
 		return CFileTextLines::UnicodeType::UTF8;
 	if (!bNonANSI && (DWORD(CRegDWORD(L"Software\\TortoiseGitMerge\\UseUTF8", FALSE))))
 		return CFileTextLines::UnicodeType::UTF8;
-	return CFileTextLines::UnicodeType::ASCII;
+	return bNonANSI ? GetDefault8BitType() : CFileTextLines::UnicodeType::ASCII;
+}
+
+CFileTextLines::UnicodeType CFileTextLines::GetDefault8BitType()
+{
+	// Files which contain non-ASCII bytes but are not valid UTF-8 are decoded
+	// with the system ANSI code page by default. This can be overridden, e.g. for
+	// repositories with DOS-era sources:
+	// HKCU\Software\TortoiseGitMerge\Default8BitCodePage (DWORD) = 866
+	switch (static_cast<DWORD>(CRegDWORD(L"Software\\TortoiseGitMerge\\Default8BitCodePage", 0)))
+	{
+	case 866:
+		return CFileTextLines::UnicodeType::CP866;
+	default:
+		return CFileTextLines::UnicodeType::ASCII;
+	}
 }
 
 
@@ -303,6 +318,9 @@ BOOL CFileTextLines::Load(const CString& sFilePath, int /*lengthHint*/ /* = 0*/)
 			break;
 		case UnicodeType::UTF32_LE:
 			pFilter = std::make_unique<CUtf32leFilter>(nullptr);
+			break;
+		case UnicodeType::CP866:
+			pFilter = std::make_unique<CCodePageFilter>(nullptr, GetCodePage(m_SaveParams.m_UnicodeType));
 			break;
 		}
 		if (!pFilter->Decode(std::move(fileBuffer), dwReadBytes))
@@ -526,6 +544,10 @@ BOOL CFileTextLines::Save( const CString& sFilePath
 		case CFileTextLines::UnicodeType::UTF32_LE:
 			pFilter = std::make_unique<CUtf32leFilter>(&file);
 			break;
+		case CFileTextLines::UnicodeType::CP866:
+			bSaveBom = false;
+			pFilter = std::make_unique<CCodePageFilter>(&file, GetCodePage(eUnicodeType));
+			break;
 		}
 
 		if (bSaveBom)
@@ -631,6 +653,8 @@ const wchar_t * CFileTextLines::GetEncodingName(UnicodeType eEncoding)
 		return L"UTF-8";
 	case UnicodeType::UTF8BOM:
 		return L"UTF-8 BOM";
+	case UnicodeType::CP866:
+		return L"OEM-866";
 	}
 	return L"";
 }

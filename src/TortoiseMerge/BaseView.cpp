@@ -480,6 +480,9 @@ void CBaseView::CalcLineCharDim()
 		return;
 	CFont *pOldFont = pDC->SelectObject(GetFont());
 	const CSize szCharExt = pDC->GetTextExtent(L"X");
+	TEXTMETRIC tm = { 0 };
+	// note: TMPF_FIXED_PITCH set means the font is *not* fixed pitch
+	m_bFixedPitchFont = pDC->GetTextMetrics(&tm) && !(tm.tmPitchAndFamily & TMPF_FIXED_PITCH);
 	pDC->SelectObject(pOldFont);
 	ReleaseDC(pDC);
 
@@ -550,6 +553,7 @@ int CBaseView::GetMaxLineLength()
 {
 	if (m_nMaxLineLength == -1)
 	{
+		TGM_TIMING("CBaseView::GetMaxLineLength (recalc)");
 		m_nMaxLineLength = 0;
 		int nLineCount = GetLineCount();
 		if (nLineCount == 1)
@@ -1419,6 +1423,14 @@ void CBaseView::DrawHeader(CDC *pdc, const CRect &rect)
 
 void CBaseView::OnDraw(CDC * pDC)
 {
+	// only time the first few paints, scrolling would flood the log
+	static int nTimedDraws = 0;
+	std::optional<CScopedTiming> drawTiming;
+	if (CTimingLog::Enabled() && nTimedDraws < 12)
+	{
+		++nTimedDraws;
+		drawTiming.emplace("CBaseView::OnDraw");
+	}
 	CRect rcClient;
 	GetClientRect(rcClient);
 
@@ -1740,6 +1752,7 @@ void CBaseView::DrawTextLine(
 	SCOPE_EXIT { pDC->SelectClipRgn(nullptr); };
 
 	LineColors lineCols = GetLineColors(nViewLine);
+	ApplySyntaxColors(lineCols, nViewLine);
 
 	CString sViewLine = GetViewLineChars(nViewLine);
 	// mark selection
@@ -1942,6 +1955,110 @@ void CBaseView::DrawTextLine(
 			coords.x = nRight;
 			nStartExp = nEndExp;
 		}
+	}
+}
+
+namespace
+{
+/// text color for a token class, CLR_INVALID to keep the color of the diff state
+COLORREF GetSyntaxColor(SyntaxClass cls, bool bDark)
+{
+	switch (cls)
+	{
+	case SyntaxClass::Comment:		return bDark ? RGB(0x6A, 0x99, 0x55) : RGB(0x00, 0x80, 0x00);
+	case SyntaxClass::Keyword:		return bDark ? RGB(0x56, 0x9C, 0xD6) : RGB(0x00, 0x00, 0xFF);
+	case SyntaxClass::Type:			return bDark ? RGB(0x4E, 0xC9, 0xB0) : RGB(0x2B, 0x91, 0xAF);
+	case SyntaxClass::String:		return bDark ? RGB(0xCE, 0x91, 0x78) : RGB(0xA3, 0x15, 0x15);
+	case SyntaxClass::Number:		return bDark ? RGB(0xB5, 0xCE, 0xA8) : RGB(0x09, 0x86, 0x58);
+	case SyntaxClass::Preprocessor:	return bDark ? RGB(0xC5, 0x86, 0xC0) : RGB(0x80, 0x80, 0x80);
+	case SyntaxClass::Regex:		return bDark ? RGB(0xD1, 0x69, 0x69) : RGB(0x81, 0x1F, 0x3F);
+	case SyntaxClass::Tag:			return bDark ? RGB(0x56, 0x9C, 0xD6) : RGB(0x80, 0x00, 0x00);
+	case SyntaxClass::Attribute:	return bDark ? RGB(0x9C, 0xDC, 0xFE) : RGB(0xE5, 0x00, 0x00);
+	case SyntaxClass::Error:		return bDark ? RGB(0xF4, 0x47, 0x47) : RGB(0xCD, 0x31, 0x31);
+	default:						return CLR_INVALID; // Default, Operator
+	}
+}
+} // namespace
+
+CString CBaseView::GetSyntaxFileName() const
+{
+	// Temp files often do not have the real extension, so prefer the reflected
+	// (real) name, then the file itself, then the name shown in the header.
+	CString candidates[] = {
+		m_pWorkingFile ? m_pWorkingFile->GetReflectedName() : CString(),
+		m_sReflectedName,
+		m_pWorkingFile ? m_pWorkingFile->GetFilename() : CString(),
+		m_sFullFilePath,
+		m_sWindowName,
+	};
+	for (const auto& candidate : candidates)
+	{
+		if (!candidate.IsEmpty() && CSyntaxHighlighter::GetLexerNameForFile(static_cast<LPCWSTR>(candidate)))
+			return candidate;
+	}
+	return CString();
+}
+
+bool CBaseView::UpdateSyntaxHighlighting()
+{
+	if (!m_pMainFrame || !m_pMainFrame->m_bSyntaxHighlight || !m_pViewData)
+		return false;
+
+	CString sFileName = GetSyntaxFileName();
+	if (sFileName != m_sSyntaxFileName)
+	{
+		m_sSyntaxFileName = sFileName;
+		if (sFileName.IsEmpty())
+			m_syntax.SetLanguageForFile(std::wstring_view());
+		else
+			m_syntax.SetLanguageForFile(static_cast<LPCWSTR>(sFileName));
+		m_pSyntaxViewData = nullptr;
+	}
+	if (!m_syntax.IsActive())
+		return false;
+
+	if (m_syntax.IsDirty() || m_pSyntaxViewData != m_pViewData || m_nSyntaxTextVersion != m_pViewData->GetTextVersion())
+	{
+		TGM_TIMING("CBaseView::UpdateSyntaxHighlighting (lex)");
+		const CViewData* pViewData = m_pViewData;
+		m_syntax.Highlight(pViewData->GetCount(), [pViewData](int line) {
+			const CString& sLine = pViewData->GetLine(line);
+			return std::wstring_view(static_cast<LPCWSTR>(sLine), sLine.GetLength());
+		});
+		m_pSyntaxViewData = m_pViewData;
+		m_nSyntaxTextVersion = m_pViewData->GetTextVersion();
+	}
+	return true;
+}
+
+void CBaseView::ApplySyntaxColors(LineColors& lineCols, int nViewLine)
+{
+	if (!UpdateSyntaxHighlighting())
+		return;
+	if (m_pViewData->GetState(nViewLine) == DiffState::Empty)
+		return;
+	if (CTheme::Instance().IsHighContrastMode())
+		return; // keep the high contrast colors
+	const bool bDark = CTheme::Instance().IsDarkTheme();
+	// SplitBlock() on an existing position would reset its "shot" (removed text marker) color
+	auto ensurePosition = [&lineCols](int pos) {
+		auto lb = lineCols.lower_bound(pos);
+		if (lb == lineCols.end() || lb->first != pos)
+			lineCols.SplitBlock(pos);
+	};
+	const auto [first, last] = m_syntax.GetRuns(nViewLine);
+	for (auto it = first; it != last; ++it)
+	{
+		const COLORREF color = GetSyntaxColor(it->cls, bDark);
+		if (color == CLR_INVALID)
+			continue;
+		const int start = it->start;
+		const int end = (it + 1 != last) ? (it + 1)->start : INT_MAX;
+		ensurePosition(start);
+		if (end != INT_MAX)
+			ensurePosition(end);
+		for (auto colIt = lineCols.lower_bound(start); colIt != lineCols.end() && colIt->first < end; ++colIt)
+			colIt->second.text = color;
 	}
 }
 
@@ -4895,13 +5012,34 @@ int CBaseView::CountMultiLines( int nViewLine )
 	bool subLinesSet = true;
 	if (m_pMainFrame->m_bWrapLines)
 	{
-		CDC* pDC = GetDC();
-		CFont* pOldFont = pDC->SelectObject(GetFont());
+		// Measuring the text is expensive (GDI call per line, and this is done for
+		// every line of every view when wrapping is enabled). With a fixed pitch font
+		// all chars below the combining diacritics range have the width of the 'X'
+		// used in CalcLineCharDim(), so measuring is only needed for other lines.
+		GetCharWidth(); // make sure m_bFixedPitchFont and m_nCharWidth are initialized
+		auto needsMeasuring = [this](const CString& line) {
+			if (!m_bFixedPitchFont)
+				return true;
+			const wchar_t* p = line;
+			for (int i = 0, len = line.GetLength(); i < len; ++i)
+			{
+				if (p[i] >= 0x0300)
+					return true;
+			}
+			return false;
+		};
+		CDC* pDC = nullptr;
+		CFont* pOldFont = nullptr;
 
 		for (const auto& line : multiLines)
 		{
-			if (line.GetLength())
+			if (line.GetLength() && needsMeasuring(line))
 			{
+				if (!pDC)
+				{
+					pDC = GetDC();
+					pOldFont = pDC->SelectObject(GetFont());
+				}
 				// we use the 'X' char to determine the char width,
 				// but e.g. chinese chars are much wider. To make sure
 				// that we wrap correctly, we calculate the average char width
@@ -4915,8 +5053,11 @@ int CBaseView::CountMultiLines( int nViewLine )
 			}
 			oScreenedLine.SubLines.push_back(line);
 		}
-		pDC->SelectObject(pOldFont);
-		ReleaseDC(pDC);
+		if (pDC)
+		{
+			pDC->SelectObject(pOldFont);
+			ReleaseDC(pDC);
+		}
 	}
 	else
 	{
@@ -5249,6 +5390,7 @@ void CBaseView::Screen2View::RebuildIfNecessary()
 	if (!m_pViewData)
 		return; // rebuild not necessary
 
+	TGM_TIMING("Screen2View::RebuildIfNecessary (rebuild)");
 	FixScreenedCacheSize(m_pwndLeft);
 	FixScreenedCacheSize(m_pwndRight);
 	FixScreenedCacheSize(m_pwndBottom);

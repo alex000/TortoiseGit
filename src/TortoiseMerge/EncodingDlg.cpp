@@ -31,7 +31,8 @@ constexpr CFileTextLines::UnicodeType uctArray[] =
 	CFileTextLines::UnicodeType::UTF32_LE,
 	CFileTextLines::UnicodeType::UTF32_BE,
 	CFileTextLines::UnicodeType::UTF8,
-	CFileTextLines::UnicodeType::UTF8BOM
+	CFileTextLines::UnicodeType::UTF8BOM,
+	CFileTextLines::UnicodeType::CP866
 };
 
 constexpr EOL eolArray[] =

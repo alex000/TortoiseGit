@@ -81,6 +81,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
 	ON_COMMAND(ID_VIEW_LINEUP, OnViewLineup)
 	ON_COMMAND(ID_VIEW_MOVEDBLOCKS, OnViewMovedBlocks)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_MOVEDBLOCKS, OnUpdateViewMovedBlocks)
+	ON_COMMAND(ID_VIEW_SYNTAXHIGHLIGHT, OnViewSyntaxHighlight)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SYNTAXHIGHLIGHT, OnUpdateViewSyntaxHighlight)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_MARKASRESOLVED, OnUpdateMergeMarkasresolved)
 	ON_COMMAND(ID_EDIT_MARKASRESOLVED, OnMergeMarkasresolved)
 	ON_UPDATE_COMMAND_UI(ID_NAVIGATE_NEXTCONFLICT, OnUpdateMergeNextconflict)
@@ -211,6 +213,7 @@ CMainFrame::CMainFrame()
 	: m_bInitSplitter(FALSE)
 	, m_regWrapLines(L"Software\\TortoiseGitMerge\\WrapLines", 0)
 	, m_regViewModedBlocks(L"Software\\TortoiseGitMerge\\ViewMovedBlocks", TRUE)
+	, m_regSyntaxHighlight(L"Software\\TortoiseGitMerge\\SyntaxHighlight", TRUE)
 	, m_regOneWay(L"Software\\TortoiseGitMerge\\OnePane")
 	, m_regCollapsed(L"Software\\TortoiseGitMerge\\Collapsed", 0)
 	, m_regInlineDiff(L"Software\\TortoiseGitMerge\\DisplayBinDiff", TRUE)
@@ -223,6 +226,7 @@ CMainFrame::CMainFrame()
 	m_bOneWay = (0 != (static_cast<DWORD>(m_regOneWay)));
 	m_bCollapsed = !!static_cast<DWORD>(m_regCollapsed);
 	m_bViewMovedBlocks = !!static_cast<DWORD>(m_regViewModedBlocks);
+	m_bSyntaxHighlight = !!static_cast<DWORD>(m_regSyntaxHighlight);
 	m_bWrapLines = !!static_cast<DWORD>(m_regWrapLines);
 	m_bInlineDiff = !!m_regInlineDiff;
 	m_bUseRibbons = !!m_regUseRibbons;
@@ -755,6 +759,7 @@ void CMainFrame::ClearViewNamesAndPaths()
 
 bool CMainFrame::LoadViews(int line)
 {
+	TGM_TIMING_FUNC();
 	LoadIgnoreCommentData();
 	m_Data.SetBlame(m_bBlame);
 	m_Data.SetMovedBlocks(m_bViewMovedBlocks);
@@ -786,7 +791,12 @@ bool CMainFrame::LoadViews(int line)
 		m_Data.SetCommentTokens(std::get<0>(sC->second), std::get<1>(sC->second), std::get<2>(sC->second));
 	else
 		m_Data.SetCommentTokens(L"", L"", L"");
-	if (!m_Data.Load())
+	bool bLoaded;
+	{
+		TGM_TIMING("CDiffData::Load");
+		bLoaded = !!m_Data.Load();
+	}
+	if (!bLoaded)
 	{
 		m_pwndLeftView->BuildAllScreen2ViewVector();
 		m_pwndLeftView->DocumentUpdated();
@@ -1036,14 +1046,20 @@ bool CMainFrame::LoadViews(int line)
 	{
 		m_Data.m_mergedFile.SetFileName(m_Data.m_yourFile.GetFilename());
 	}
-	m_pwndLeftView->BuildAllScreen2ViewVector();
-	m_pwndLeftView->DocumentUpdated();
-	m_pwndRightView->DocumentUpdated();
-	m_pwndBottomView->DocumentUpdated();
-	m_wndLocatorBar.DocumentUpdated();
-	m_wndLineDiffBar.DocumentUpdated();
-	UpdateLayout();
-	SetActiveView(pwndActiveView);
+	{
+		TGM_TIMING("LoadViews: DocumentUpdated (final)");
+		m_pwndLeftView->BuildAllScreen2ViewVector();
+		m_pwndLeftView->DocumentUpdated();
+		m_pwndRightView->DocumentUpdated();
+		m_pwndBottomView->DocumentUpdated();
+		m_wndLocatorBar.DocumentUpdated();
+		m_wndLineDiffBar.DocumentUpdated();
+	}
+	{
+		TGM_TIMING("LoadViews: UpdateLayout+SetActiveView");
+		UpdateLayout();
+		SetActiveView(pwndActiveView);
+	}
 
 	if ((line >= -1) && m_pwndRightView->m_pViewData)
 	{
@@ -3064,6 +3080,24 @@ void CMainFrame::OnViewMovedBlocks()
 	LoadViews(-1);
 }
 
+void CMainFrame::OnViewSyntaxHighlight()
+{
+	m_bSyntaxHighlight = !m_bSyntaxHighlight;
+	m_regSyntaxHighlight = m_bSyntaxHighlight;
+	// the views check the flag while drawing; the highlighting itself is cached per view
+	if (m_pwndLeftView)
+		m_pwndLeftView->Invalidate();
+	if (m_pwndRightView)
+		m_pwndRightView->Invalidate();
+	if (m_pwndBottomView)
+		m_pwndBottomView->Invalidate();
+}
+
+void CMainFrame::OnUpdateViewSyntaxHighlight(CCmdUI *pCmdUI)
+{
+	pCmdUI->SetCheck(m_bSyntaxHighlight);
+}
+
 void CMainFrame::OnUpdateViewMovedBlocks(CCmdUI *pCmdUI)
 {
 	pCmdUI->SetCheck(m_bViewMovedBlocks);
@@ -3491,6 +3525,7 @@ void CMainFrame::FillEncodingButton( CMFCRibbonButton * pButton, int start )
 	pButton->AddSubItem(new CMFCRibbonButton(start + static_cast<int>(CFileTextLines::UnicodeType::UTF32_BE),    L"UTF-32BE"    ));
 	pButton->AddSubItem(new CMFCRibbonButton(start + static_cast<int>(CFileTextLines::UnicodeType::UTF8),        L"UTF-8"       ));
 	pButton->AddSubItem(new CMFCRibbonButton(start + static_cast<int>(CFileTextLines::UnicodeType::UTF8BOM),     L"UTF-8 BOM"   ));
+	pButton->AddSubItem(new CMFCRibbonButton(start + static_cast<int>(CFileTextLines::UnicodeType::CP866),       L"OEM-866"     ));
 }
 
 void CMainFrame::FillEOLButton( CMFCRibbonButton * pButton, int start )
@@ -3537,6 +3572,7 @@ bool CMainFrame::AdjustUnicodeTypeForLoad(CFileTextLines::UnicodeType& type)
 		case CFileTextLines::UnicodeType::UTF32_LE:
 		case CFileTextLines::UnicodeType::UTF32_BE:
 		case CFileTextLines::UnicodeType::UTF8:
+		case CFileTextLines::UnicodeType::CP866:
 		return true;
 
 		case CFileTextLines::UnicodeType::UTF16_LEBOM:

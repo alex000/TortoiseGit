@@ -566,6 +566,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Wrap long lines",             ID_VIEW_WRAPLONGLINES
         MENUITEM "&Moved blocks",               ID_VIEW_MOVEDBLOCKS
+        MENUITEM "S&yntax highlighting",        ID_VIEW_SYNTAXHIGHLIGHT
         MENUITEM "Inline diff",                 ID_VIEW_INLINEDIFF
         MENUITEM "Inline diff word-wise",       ID_VIEW_INLINEDIFFWORD
         MENUITEM "Compare whitespaces",         ID_VIEW_COMPAREWHITESPACES
@@ -1084,6 +1085,7 @@ END
 STRINGTABLE
 BEGIN
     ID_VIEW_MOVEDBLOCKS     "Detect and highlight moved blocks"
+    ID_VIEW_SYNTAXHIGHLIGHT "Colorize the text according to the programming language of the file\nSyntax highlighting"
     ID_VIEW_WRAPLONGLINES   "Wrap long lines at the right border of the view\nWrap long lines"
     ID_VIEW_INLINEDIFF      "Show Inline-Diff\nInline diff"
     ID_EDIT_FINDNEXTSTART   "Find the next occurrence of the selected text\nSearch Next"

@@ -48,7 +48,7 @@
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir);..\..\ext\gitdll;..\git;.\svninclude;..\..\ext\build\apr;..\..\ext\apr\include;..\..\ext\apr-util\include;.\libsvn_diff;..\Utils;..\;..\Utils\MiscUI;..\..\ext\ResizableLib;..\..\ext\libgit2\include;..\..\ext\zlib;..\..\ext\editorconfig\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);..\..\ext\gitdll;..\git;.\svninclude;..\..\ext\build\apr;..\..\ext\apr\include;..\..\ext\apr-util\include;.\libsvn_diff;..\Utils;..\;..\Utils\MiscUI;..\..\ext\ResizableLib;..\..\ext\libgit2\include;..\..\ext\zlib;..\..\ext\editorconfig\include;..\..\ext\scintilla\include;..\..\ext\lexilla\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>APR_DECLARE_STATIC;APU_DECLARE_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ResourceCompile>
@@ -173,6 +173,7 @@
     <ClCompile Include="LocatorBar.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="MovedBlocks.cpp" />
+    <ClCompile Include="SyntaxHighlighter.cpp" />
     <ClCompile Include="OpenDlg.cpp" />
     <ClCompile Include="RegexFilterDlg.cpp" />
     <ClCompile Include="RegexFiltersDlg.cpp" />
@@ -388,6 +389,8 @@
     <ClInclude Include="LocatorBar.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="MovedBlocks.h" />
+    <ClInclude Include="SyntaxHighlighter.h" />
+    <ClInclude Include="TimingLog.h" />
     <ClInclude Include="OpenDlg.h" />
     <ClInclude Include="Patch.h" />
     <ClInclude Include="RegexFilterDlg.h" />
@@ -470,6 +473,11 @@
     </ProjectReference>
     <ProjectReference Include="..\..\ext\build\zlib.vcxproj">
       <Project>{5c6b6a95-2053-4593-9617-c4f176736d5a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ext\build\ScintillaLexer.vcxproj">
+      <Project>{a5498556-ce09-4095-8335-08fc8370552d}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>
     <ProjectReference Include="..\..\ext\gitdll\gitdll.vcxproj">
       <Project>{4f0a55de-dafd-4a0b-a03d-2c14cb77e08f}</Project>

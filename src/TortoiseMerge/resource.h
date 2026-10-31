@@ -368,13 +368,14 @@
 #define ID_REGEXFILTER_REGEXFILTER      32993
 #define ID_EDIT_THREEWAY_ACTIONS        33001
 #define ID_REGEX_NO_FILTER              33002
+#define ID_VIEW_SYNTAXHIGHLIGHT         33003
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        175
-#define _APS_NEXT_COMMAND_VALUE         33003
+#define _APS_NEXT_COMMAND_VALUE         33004
 #define _APS_NEXT_CONTROL_VALUE         1514
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

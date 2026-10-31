@@ -72,7 +72,7 @@ private:
 **/
 	tsvn_svn_diff_t_extension* MovedBlocksDetect(svn_diff_t* diffYourBase, IgnoreWS ignoreWs, apr_pool_t* pool);
 
-	void TieMovedBlocks(int from, int to, apr_off_t length);
+	void TieMovedBlocks(int from, int to, apr_off_t length, const CLineNumberIndex& leftIndex, const CLineNumberIndex& rightIndex, const CLineNumberIndex& bothIndex);
 
 	void HideUnchangedSections(CViewData * data1, CViewData * data2, CViewData * data3) const;
 

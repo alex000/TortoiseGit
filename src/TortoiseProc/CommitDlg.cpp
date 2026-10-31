@@ -2079,6 +2079,9 @@ void CCommitDlg::ScanFile(std::map<CString, int>& autolist, const CString& sFile
 		case CFileTextLines::UnicodeType::UTF8BOM:
 			pFilter = std::make_unique<CUtf8Filter>(nullptr);
 			break;
+		case CFileTextLines::UnicodeType::CP866:
+			pFilter = std::make_unique<CCodePageFilter>(nullptr, CFileTextLines::GetCodePage(type));
+			break;
 		default:
 		case CFileTextLines::UnicodeType::ASCII:
 			pFilter = std::make_unique<CAsciiFilter>(nullptr);
