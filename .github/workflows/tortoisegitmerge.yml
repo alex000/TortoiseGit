@@ -1,0 +1,59 @@
+name: TortoiseGitMerge
+
+on:
+  push:
+    paths:
+      - 'src/TortoiseMerge/**'
+      - 'src/Resources/TortoiseMerge*'
+      - 'src/Resources/TortoiseGitMergeRibbon.xml'
+      - 'src/Resources/ribbon/**'
+      - 'src/Utils/**'
+      - 'src/Git/**'
+      - 'src/*.props'
+      - 'ext/build/**'
+      - '.github/workflows/tortoisegitmerge.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Release]
+        platform: [x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Fetch required submodules
+        shell: cmd
+        run: git submodule update --init --depth 1 -- ext/apr ext/apr-util ext/zlib ext/libgit2 ext/pcre2 ext/tgit ext/editorconfig ext/lexilla ext/Detours
+
+      - name: Apply TortoiseGit libgit2 patches
+        shell: cmd
+        working-directory: ext/libgit2
+        run: |
+          for %%G in (..\libgit2-*.patch) do ( type %%G | git -c user.email=ci@example.com -c user.name=CI am || exit /b 1 )
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build TortoiseGitMerge
+        shell: cmd
+        run: msbuild src\TortoiseGit.sln /t:TortoiseGitMerge /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /m /nologo /v:minimal
+
+      - name: Collect binaries
+        shell: pwsh
+        run: |
+          $suffix = @{ 'x64' = '64'; 'Win32' = ''; 'ARM64' = 'ARM64' }['${{ matrix.platform }}']
+          $bin = "bin\${{ matrix.configuration }}$suffix\bin"
+          New-Item -ItemType Directory -Force artifact | Out-Null
+          Get-ChildItem $bin -Include *.exe,*.dll,*.pdb -Recurse | Copy-Item -Destination artifact
+          Get-ChildItem artifact
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TortoiseGitMerge-${{ matrix.configuration }}-${{ matrix.platform }}
+          path: artifact
